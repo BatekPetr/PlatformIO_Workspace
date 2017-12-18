@@ -160,14 +160,55 @@ bool Avr_SetTimer(eTimers tim, float sec)
       break;
 
     case(Tim1):   // (supposed to be 16bit timer) seems like it is 8 bit as well
-      TCCR1B |= (1 << WGM12);  // Mode 4, CTC on OCR1A
+      {
 
-      presc = 64;
-      OCR1A = ( (F_CPU*sec/presc) ) - 1; // Set the value that you want to count to
+        // USE Timer 1 in MODE 4 - CLEAR TIMER on COMPARE - using OCR1A register
+        TCCR1A = 0;                 // clear control register A
+        TCCR1B |= (1 << WGM12);
+        char oldSREG = SREG;
+        cli();    // Disable interrupts for 16 bit register access
+        presc = 1024;
+        OCR1A =( (F_CPU*sec/presc) ) - 1; // Set the value that you want to count to
+        SREG = oldSREG;
 
-      TIMSK1 |= (1 << OCIE1A);   //Set interrupt on compare match
+        TCCR1B &= ~(_BV(CS10) | _BV(CS11) | _BV(CS12));
+        TCCR1B |= (1 << CS12) | (1 << CS10); // set prescaler to 1024 and start the timer
 
-      TCCR1B = (1 << CS11) | (1 << CS10); // set prescaler to 64 and start the timer
+        TIMSK1 |= (1 << OCIE1A);   //Set interrupt on compare match
+
+        /*
+        // USE Timer 1 in MODE 8 - PHASE FREQUENCY Correct PWM
+        TCCR1A = 0;                 // clear control register A
+        TCCR1B |= (1 << WGM13);  // Mode 8, phase and frequency correct pwm, stop the timer
+        presc = 1024;
+        char oldSREG = SREG;
+        cli();
+        ICR1 =( (F_CPU/2000000) * 1000000*sec )/presc - 1; // Set the value that you want to count to
+        SREG = oldSREG;
+
+        TIMSK1 |= (1 << TOIE1);   //Set interrupt on Timer Overflow
+
+        TCCR1B &= ~(_BV(CS10) | _BV(CS11) | _BV(CS12));
+        TCCR1B |= (1 << CS12) | (1 << CS10); // set prescaler to 1024 and start the timer
+        */
+
+        /*
+        // Use Timer 1 in MODE 12 - CLEAR TIMER on COMPARE using ICR1 register
+        TCCR1A = 0;                 // clear control register A
+        TCCR1B |= (1 << WGM13) | (1 << WGM12);
+
+        char oldSREG = SREG;
+        cli();
+        presc = 1024;
+        ICR1 =( (F_CPU*sec/presc) ) - 1; // Set the value that you want to count to
+        SREG = oldSREG;
+
+        TIMSK1 |= (1 << ICIE1);
+
+        TCCR1B &= ~(_BV(CS10) | _BV(CS11) | _BV(CS12));
+        TCCR1B |= (1 << CS12) | (1 << CS10); // set prescaler to 1024 and start the timer
+        */
+      }
       break;
 
     case(Tim2):   // 8bit timer
@@ -190,36 +231,62 @@ bool Avr_SetTimer(eTimers tim, float sec)
   return true;
 }
 
-bool Avr_SetPWM(eTimers tim, float duty )
+bool Avr_InitPWM(eTimers tim, float period, float duty )
 {
+  int presc = 1;
   switch(tim)
   {
     case(Tim0):   // 8bit timer
       // initialize timer0 in Fast PWM mode
+      TCCR0A = 0;
       TCCR0A |= (1<<WGM01)|(1<<WGM00);
+      TCCR0B &= ~(1<<WGM02);
 
-      TCCR0A |= (1<<COM0B1); // NON-inverting mode
-      TCCR0B |=  (1 << CS00);   //Start Timer0, with No prescaling
+      presc = 64;
+      OCR0A = ( (F_CPU/presc) * period ) - 1; // Set the value that you want to count to;
+      OCR0B = duty*OCR0A;
 
-      OCR0B = duty;
+      TCCR0A |= (1<<COM0B1) | (1<<COM0B0); // inverting mode
+
+      TCCR0B = 0;
+      TCCR0B |=  (1 << CS01) | (1 << CS00);   //Start Timer0, with 64 prescaling
+
       break;
 
     case(Tim1):
       // initialize timer1 in Fast PWM mode, with TOP in ICR1
-      TCCR1A |= (1<<WGM10);
-      TCCR1B |= (1<<WGM12);
+      TCCR1A = 0;
+      TCCR1A |= (1<<WGM11);
+      TCCR1B |= (1<<WGM13) | (1<<WGM12);
 
-      TCCR1A |= (1<<COM1A1); // NON-inverting mode
+      presc = 1024;
+      ICR1 = ( (F_CPU/presc) * period ) - 1; // Set the value that you want to count to;
+      OCR1A = duty*ICR1;
 
-      ICR1 = 255;
-      OCR1A = duty;
+      TCCR1A |= (1<<COM1A1) | (1<<COM1A0); // inverting mode
 
-      TCCR1B |=  (1 << CS10);   //Start Timer0, with NO prescaling
+      //TCCR1B |=  (1 << CS10);   //Start Timer0, with NO prescaling
+      TCCR1B &= ~(_BV(CS10) | _BV(CS11) | _BV(CS12));
+      TCCR1B |= (1 << CS12) | (1 << CS10); // set prescaler to 1024 and start the timer
 
       break;
     }
 
     return true;
+}
+
+bool Avr_SetPWM(eTimers tim, float duty )
+{
+  switch(tim)
+  {
+    case(Tim0):
+      OCR0B = duty*OCR0A;
+      break;
+    case(Tim1):
+      OCR1A = duty*ICR1;
+      break;
+  }
+  return true;
 }
 /*
 void Duty( uint8_t percentage, uint16_t ICR1_value)

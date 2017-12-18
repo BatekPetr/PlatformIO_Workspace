@@ -28,16 +28,15 @@ typedef enum {
   Tim2
 } eTimers;
 
+
 bool Avr_SetPinGPIO(ePorts port, int bitnum, eIoPortModes mode);
 void GPIOToggle(ePorts port, int bitnum);
 bool GPIORead(ePorts port, int bitnum);
 void GPIOWrite(ePorts port, int bitnum, bool state);
 
 bool Avr_SetTimer(eTimers tim, float sec);
+bool Avr_InitPWM(eTimers tim, float period, float duty );
 bool Avr_SetPWM(eTimers tim, float duty );
-
-void Duty( uint8_t percentage, uint16_t ICR1_value);
-void FrequencyPWM(uint8_t frequency, uint8_t percentage);
 
 
 #endif //AVR_CORE_H
